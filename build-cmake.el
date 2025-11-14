@@ -227,9 +227,9 @@ If an element in `list` starts with any string in `args`, it will be stripped."
                                     preset
                                     (if target (format " --target %s" target) "")
                                     (string-join (build--cmake-strip-arguments args '("--preset=" "--target=" "--clean-first")) " "))
-                          (format "cmake --build %s%s%s"
+                          (format "cmake --build %s %s %s"
                                   (or (transient-arg-value "-B=" args) "build")
-                                  (if target (format " --target %s" target) "")
+                                  (if target (format " --target %s " target) "")
                                   (string-join (build--cmake-strip-arguments args '("-B=" "-S=" "-G=" " -D" "--preset=" "--target=")) " ")))))
     (funcall build--compile build-command)))
 
@@ -238,10 +238,15 @@ If an element in `list` starts with any string in `args`, it will be stripped."
   (interactive
    (list (transient-args 'build-cmake-transient)))
   (let ((default-directory (project-root (project-current)))
-        (preset (transient-arg-value "--preset=" args)))
+        (preset (transient-arg-value "--preset=" args))
+        (source-dir (transient-arg-value "-S=" args))
+        (build-dir (transient-arg-value "-B=" args)))
     (if preset
-        ;; Use preset - no need for other arguments
-        (let ((generate-command (format "cmake --preset %s" preset)))
+        ;; Use preset but honor -S and -B if provided
+        (let ((generate-command (format "cmake --preset %s %s %s"
+                                        preset
+                                        (if source-dir (format " -S %s " source-dir) "")
+                                        (if build-dir (format " -B %s " build-dir) ""))))
           (funcall build--compile generate-command))
       ;; Use traditional arguments
       (let ((processed-args (mapcar (lambda (arg)
@@ -251,7 +256,7 @@ If an element in `list` starts with any string in `args`, it will be stripped."
                                         arg))
                                     (build--cmake-strip-arguments args '("--clean-first" "--target" "--preset=")))))
         ;; Join the processed args into a single string and run cmake
-        (let ((generate-command (format "cmake %s" (string-join processed-args " "))))
+        (let ((generate-command (format "cmake %s " (string-join processed-args " "))))
           (funcall build--compile generate-command))))))
 
 (transient-define-prefix build-cmake-transient ()
@@ -265,7 +270,7 @@ If an element in `list` starts with any string in `args`, it will be stripped."
                (let ((presets (build--cmake-list-presets)))
                  (if presets
                      (completing-read prompt presets)
-                   (user-error "No CMake presets available")))))
+                   (message "No CMake presets available.")))))
     ]
    ["Generating"
     ("-S" "Set source directory" "-S=" :prompt "Path to source: ")
@@ -278,7 +283,7 @@ If an element in `list` starts with any string in `args`, it will be stripped."
                (let ((generators (build--cmake-list-generators)))
                  (if generators
                      (completing-read prompt generators)
-                   (user-error "No CMake generators available")))))
+                   (message "No CMake generators available")))))
     ]
    ["Building"
     ("-C" "Clean first" "--clean-first")
